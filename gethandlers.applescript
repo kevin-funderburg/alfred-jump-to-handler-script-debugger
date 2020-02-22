@@ -3,7 +3,7 @@
                         Jump to Handler in Script Debugger
 ===============================================================================
 
-Version: 1.0                                    Updated: 05/09/19 10:51:28 CST
+Version: 1.0                                    Updated: 2/22/20, 2:45:29 PM
 By: Kevin Funderburg
 
 PURPOSE:
@@ -72,7 +72,13 @@ on main(wf)
 									set selectionend to (count of characters of p) - 4
 								end if
 								
-								add_result of wf given theUid:(missing value), theArg:insert & "," & selectionend, theTitle:_title, theSubtitle:missing value, theIcon:{theType:"filepath", thePath:"icon.png"}, theAutocomplete:p, theType:missing value, isValid:"yes", theQuicklook:missing value, theVars:missing value, theMods:missing value, theText:missing value
+								set itm to wf's ¬
+									(its newItemWithUID:(missing value) arg:((insert & "," & selectionend) as text) title:_title subtitle:"press ↩︎ to select" icon:(missing value) autocomplete:p |type|:"default" valid:true quicklookurl:(missing value) |text|:(missing value))
+								tell itm
+									(its setIcon:"filepath" thePath:"icon.png")
+									addItem()
+								end tell
+								
 							end if
 							
 						end repeat
@@ -80,16 +86,20 @@ on main(wf)
 				end if
 				
 				if wf's _results = {} then
-					add_result of wf given theUid:(missing value), theArg:missing value, theTitle:"No handlers found!", theSubtitle:missing value, theIcon:wf's ICON_ERROR, theAutocomplete:missing value, theType:"file", isValid:"no", theQuicklook:missing value, theVars:missing value, theMods:missing value, theText:missing value
+					set itm to wf's (its newItemWithUID:"q_err" arg:"q_err" title:"No handlers found!" subtitle:"No unread messages found" icon:(wf's ICON_ERROR) autocomplete:(missing value) |type|:"file" valid:"no" quicklookurl:(missing value) |text|:(missing value))
+					itm's addItem()
+					
 				end if
 				
 			end tell
 		end tell
 	on error errMsg number errNum
-		add_result of wf given theUid:(missing value), theArg:missing value, theTitle:errMsg, theSubtitle:errNum, theIcon:wf's ICON_ERROR, theAutocomplete:missing value, theType:"file", isValid:"no", theQuicklook:missing value, theVars:missing value, theMods:missing value, theText:missing value
+		set itm to wf's (its newItemWithUID:"q_err" arg:"q_err" title:"An error occurred..." subtitle:errMsg icon:(wf's ICON_ERROR) autocomplete:(missing value) |type|:"default" valid:"no" quicklookurl:(missing value) |text|:(missing value))
+		itm's addItem()
 	end try
 	
-	return wf's to_json(missing value)
+	return wf's wftoJSON()
+	
 end main
 
 
@@ -103,3 +113,4 @@ on run argv
 	set wf to wlib's newWorkflow()
 	main(wf)
 end run
+

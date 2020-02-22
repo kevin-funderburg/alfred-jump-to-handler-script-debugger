@@ -2,24 +2,28 @@
 -- Handlers for creating new Workflow script objects (mimics classes and constructors from OOP) to be used for developing Alfred 3 workflows
 --
 -- Authors: Ursan Razvan (original developer for Alfred 2, did most of the heavy lifting)
---          Kevin Funderburg - updates for Alfred 3 and extra handlers
+--          Kevin Funderburg - expanded for Alfred 4, added item object and JSON export
 --
--- Revised: 05/08/19 
+-- Revised: 02/22/20 
 --
 --
 use AppleScript version "2.4" -- Yosemite (10.10) or later
 use framework "Foundation"
 use scripting additions
 
-property name : "Alfred Library"
-property id : "com.kfunderburg.library.alfredLibrary"
-property version : "1.0.0"
+property name : "Workflow"
+property id : "com.kfunderburg.workflow"
+property version : "1.1.0"
 
 property NSString : a reference to current application's NSString
 
 property ICON_PATH_BASE : "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/"
-property ICON_ERROR : {theType:"filepath", thePath:ICON_PATH_BASE & "AlertStopIcon.icns"}
-property ICON_INFO : {theType:"filepath", thePath:ICON_PATH_BASE & "ToolbarInfo.icns"}
+
+property ICON_ACCOUNTS : {|type|:"filepath", |path|:ICON_PATH_BASE & "Accounts.icns"}
+property ICON_CAUTION : {|type|:"filepath", |path|:ICON_PATH_BASE & "AlertCautionIcon.icns"}
+property ICON_ERROR : {|type|:"filepath", |path|:ICON_PATH_BASE & "AlertStopIcon.icns"}
+property ICON_GENERIC_APP : {|type|:"filepath", |path|:ICON_PATH_BASE & "GenericApplicationIcon.icns"}
+property ICON_INFO : {|type|:"filepath", |path|:ICON_PATH_BASE & "ToolbarInfo.icns"}
 
 on newWorkflow()
 	return my newWorkFlowWithBundle(missing value)
@@ -41,6 +45,7 @@ on newWorkFlowWithBundle(bundleid)
 		property _path : missing value
 		property _preferences : missing value
 		property _results : missing value
+		property |items| : missing value
 		property _uuid : missing value
 		
 		on run
@@ -65,7 +70,7 @@ on newWorkFlowWithBundle(bundleid)
 			set _infoPlist to _path & "info.plist"
 			
 			# initialize the results list
-			set my _results to {}
+			set my _results to {|items|:{}}
 			
 			# return this new script object
 			return me
@@ -123,174 +128,85 @@ on newWorkFlowWithBundle(bundleid)
 			return (system attribute varName) as text
 		end getVar
 		
-		on to_json(a)
-			local r
-			local json
-			if (my q_is_empty(a)) and (not my q_is_empty(my _results)) then
-				set a to my _results
-			else if (my q_is_empty(a)) and (my q_is_empty(my _results)) then
-				return missing value
-			end if
+		on newItemWithUID:theuid arg:theArg title:theTitle subtitle:theSub icon:theIcon autocomplete:theAuto |type|:theType valid:isValid quicklookurl:theQuick |text|:theText
 			
-			set tab2 to tab & tab
-			set tab3 to tab & tab & tab
-			set tab4 to tab & tab & tab & tab
+			script |item|
+				property _uid : theuid
+				property _arg : theArg
+				property _title : theTitle
+				property _subtitle : theSub
+				property _icon : theIcon
+				property _autocomplete : theAuto
+				property _type : theType
+				property _valid : isValid
+				property _quicklookurl : theQuick
+				property _text : theText
+				property _variables : missing value
+				property _mods : missing value
+				property |record| : missing value
+				
+				on run
+					if isEmpty(_type) then set _type to "default"
+					set |record| to {}
+					set _variables to {}
+					set _mods to {}
+					return me
+				end run
+				
+				on addMod:|name| valid:_valid arg:_arg subtitle:_subtitle
+					set rec to {valid:_valid, arg:_arg, subtitle:_subtitle}
+					if |name| = "cmd" then
+						set _mods to _mods & {cmd:rec}
+					else if |name| = "alt" then
+						set _mods to _mods & {alt:rec}
+					else if |name| = "ctrl" then
+						set _mods to _mods & {ctrl:rec}
+					else if |name| = "shift" then
+						set _mods to _mods & {shift:rec}
+					else if |name| = "fn" then
+						set _mods to _mods & {fn:rec}
+					else
+						error |name| & " is not a valid mod key"
+					end if
+				end addMod:valid:arg:subtitle:
+				
+				on addVar:_name varValue:_value
+					set varRecord to makeVarRecord(_name, _value)
+					set _variables to _variables & varRecord
+				end addVar:varValue:
+				
+				on makeVarRecord(varName, varVal)
+					set varJSONstring to "[{\"" & varName & "\" : \"" & varVal & "\",}]"
+					return my convertJSONToAS:(varJSONstring) isPath:false
+				end makeVarRecord
+				
+				on setIcon:_type thePath:_path
+					set _icon to {|type|:_type, |path|:_path}
+				end setIcon:thePath:
+				
+				on addItem()
+					set |record| to {arg:_arg, title:_title, subtitle:_subtitle, icon:_icon, |type|:_type, valid:_valid}
+					if not isEmpty(_uid) then catRecord({uid:_uid})
+					if not isEmpty(_mods) then catRecord({mods:_mods})
+					if not isEmpty(_variables) then catRecord({variables:_variables})
+					if not isEmpty(_text) then catRecord({|text|:_text})
+					if not isEmpty(_quicklookurl) then catRecord({quicklookurl:_quicklookurl})
+					if not isEmpty(_autocomplete) then catRecord({autocomplete:_autocomplete})
+					set end of (my _results's |items|) to |record|
+				end addItem
+				
+				on catRecord(rec)
+					set |record| to |record| & rec
+				end catRecord
+			end script
+			run |item|
 			
-			set json to "{\"items\": [" & return & return
-			repeat with itemRef in a
-				set r to contents of itemRef
-				set json to json & tab & "{" & return
-				if not q_is_empty(theUid of r) then
-					set json to json & tab2 & "\"uid\": \"" & encode(theUid of r) & "\"," & return
-				end if
-				set json to json & tab2 & "\"valid\": \"" & my encode(isValid of r) & "\"," & return
-				set json to json & tab2 & "\"title\": \"" & my encode(theTitle of r) & "\"," & return
-				set json to json & tab2 & "\"subtitle\": \"" & my encode(theSubtitle of r) & "\"," & return
-				set json to json & tab2 & "\"arg\": \"" & my encode(theArg of r) & "\"," & return
-				if not q_is_empty(theAutocomplete of r) then
-					set json to json & tab2 & "\"autocomplete\": \"" & my encode(theAutocomplete of r) & "\"," & return
-				end if
-				if not q_is_empty(theQuicklook of r) then
-					set json to json & tab2 & "\"quicklookurl\": \"" & my encode(theQuicklook of r) & "\"," & return
-				end if
-				
-				if not q_is_empty(theIcon of r) then
-					set ic to theIcon of r
-					set json to json & tab2 & "\"icon\": {" & return
-					if not q_is_empty(theType of ic) then
-						set json to json & tab3 & "\"type\": \"" & my encode(theType of ic) & "\"," & return
-					end if
-					if not q_is_empty(thePath of ic) then
-						set json to json & tab3 & "\"path\": \"" & my encode(thePath of ic) & "\"" & return
-					end if
-					set json to json & tab2 & "}," & return
-				end if
-				
-				if not q_is_empty(theVars of r) then
-					set vars to ""
-					set json to json & tab2 & "\"variables\" : {" & return
-					repeat with v in theVars of r
-						set varName to |name| of v
-						set varVal to value of v
-						set json to json & tab3 & "\"" & my encode(varName) & "\": \"" & my encode(varVal) & "\"," & return
-					end repeat
-					set json to json & tab2 & "}," & return
-				end if
-				
-				if not q_is_empty(theMods of r) then
-					set json to json & tab2 & "\"mods\": {" & return
-					set m to theMods of r
-					if not q_is_empty(cmd of m) then
-						set json to json & tab3 & "\"cmd\": {" & return
-						set json to json & tab4 & "\"valid\": \"" & my encode(isValid of cmd of m) & "\"," & return
-						set json to json & tab4 & "\"arg\": \"" & my encode(theArg of cmd of m) & "\"," & return
-						set json to json & tab4 & "\"subtitle\": \"" & my encode(theSubtitle of cmd of m) & "\"" & return
-						set json to json & tab3 & "}," & return
-					end if
-					if not q_is_empty(alt of m) then
-						set json to json & tab3 & "\"alt\": {" & return
-						set json to json & tab4 & "\"valid\": \"" & my encode(isValid of alt of m) & "\"," & return
-						set json to json & tab4 & "\"arg\": \"" & my encode(theArg of alt of m) & "\"," & return
-						set json to json & tab4 & "\"subtitle\": \"" & my encode(theSubtitle of alt of m) & "\"" & return
-						set json to json & tab3 & "}," & return
-					end if
-					if not q_is_empty(ctrl of m) then
-						set json to json & tab3 & "\"ctrl\": {" & return
-						set json to json & tab4 & "\"valid\": \"" & my encode(isValid of ctrl of m) & "\"," & return
-						set json to json & tab4 & "\"arg\": \"" & my encode(theArg of ctrl of m) & "\"," & return
-						set json to json & tab4 & "\"subtitle\": \"" & my encode(theSubtitle of ctrl of m) & "\"" & return
-						set json to json & tab3 & "}," & return
-					end if
-					if not q_is_empty(shift of m) then
-						set json to json & tab3 & "\"shift\": {" & return
-						set json to json & tab4 & "\"valid\": \"" & my encode(isValid of shift of m) & "\"," & return
-						set json to json & tab4 & "\"arg\": \"" & my encode(theArg of shift of m) & "\"," & return
-						set json to json & tab4 & "\"subtitle\": \"" & my encode(theSubtitle of shift of m) & "\"" & return
-						set json to json & tab3 & "}," & return
-					end if
-					if not q_is_empty(fn of m) then
-						set json to json & tab3 & "\"fn\": {" & return
-						set json to json & tab4 & "\"valid\": \"" & my encode(isValid of fn of m) & "\"," & return
-						set json to json & tab4 & "\"arg\": \"" & my encode(theArg of fn of m) & "\"," & return
-						set json to json & tab4 & "\"subtitle\": \"" & my encode(theSubtitle of fn of m) & "\"" & return
-						set json to json & tab3 & "}," & return
-					end if
-					set json to json & tab2 & "}" & return
-				end if
-				
-				if not q_is_empty(theText of r) then
-					set json to json & tab2 & "\"text\": {" & return
-					set t to theText of r
-					if not q_is_empty(theCopy of t) then
-						set json to json & tab3 & "\"copy\": \"" & my encode(theCopy of t) & "\"," & return
-					end if
-					if not q_is_empty(theLarge of t) then
-						set json to json & tab3 & "\"largetype\": \"" & my encode(theLarge of t) & "\"" & return
-					end if
-					set json to json & tab2 & "}," & return
-				end if
-				
-				set json to json & tab & "}," & return & return
-				
-			end repeat
-			
-			set json to json & return & "]}"
-		end to_json
+		end newItemWithUID:arg:title:subtitle:icon:autocomplete:|type|:valid:quicklookurl:|text|:
 		
 		
-		-- @description
-		-- gets the path of an application icon
-		--
-		-- @param $theApp - list of app names
-		--
-		on getIconPath(theApp)
-			tell application "Finder" to set appnames to displayed name of every file in folder ((path to applications folder))
-			if theApp = "Finder" then
-				set iconrecord to {theType:"fileicon", thePath:"/System/Library/CoreServices/Finder.app"}
-			else if theApp = "Global" then
-				set iconrecord to {theType:"file", thePath:my getPreferences() & "/resources/GlobalAppIcon.icns"}
-			else if theApp = "Script Editor" then
-				set iconrecord to {theType:"fileicon", thePath:"/Applications/Utilities/Script Editor.app"}
-			else if appnames contains theApp then
-				set iconrecord to {theType:"fileicon", thePath:"/Applications/" & theApp & ".app"}
-			else
-				set iconrecord to {theType:"file", thePath:(my getPreferences() & "/resources/BlankAppIcon.png")}
-			end if
-		end getIconPath
-		
-		
-		-- @description
-		-- Helper function that just makes it easier to pass values into a function
-		-- and create an array result to be passed back to Alfred
-		--
-		-- @param $theUid - the uid of the result, should be unique
-		-- @param $theArg - the argument that will be passed on
-		-- @param $theTitle - The title of the result item
-		-- @param $theSubtitle - The subtitle text for the result item
-		-- @param $theIcon - the icon to use for the result item
-		-- @param $isValid - sets whether the result item can be actioned
-		-- @param $theAutocomplete - the autocomplete value for the result item
-		-- @param $theText - {theCopy:_copy, theLarge:_largetype}
-		-- @return list items to be passed back to Alfred
-		--
-		on add_result given theUid:_uid, theArg:_arg, theTitle:_title, theSubtitle:_sub, theIcon:_icon, theAutocomplete:_auto, theType:_type, isValid:_valid, theQuicklook:_quicklook, theVars:_vars, theMods:_mods, theText:_text
-			if _uid is missing value then set _uid to ""
-			if _arg is missing value then set _arg to ""
-			if _title is missing value then set _title to ""
-			if _sub is missing value then set _sub to ""
-			if _icon is missing value then set _icon to ""
-			if _auto is missing value then set _auto to ""
-			if _type is missing value then set _type to ""
-			if _valid is missing value then set _valid to "yes"
-			
-			set temp to {theUid:_uid, theArg:_arg, theTitle:_title, theSubtitle:_sub, theIcon:_icon, theAutocomplete:_auto, theType:_type, isValid:_valid, theQuicklook:_quicklook, theVars:_vars, theMods:_mods, theText:_text}
-			if my q_is_empty(_type) then
-				set temp's theType to missing value
-			end if
-			
-			set end of (my _results) to temp
-			return temp
-		end add_result
+		on wftoJSON()
+			return my toJSON(_results)
+		end wftoJSON
 		
 	end script
 	
@@ -298,6 +214,31 @@ on newWorkFlowWithBundle(bundleid)
 	tell Workflow to run
 	
 end newWorkFlowWithBundle
+
+on toJSON(str)
+	--convert to JSON data
+	set {theData, theError} to current application's NSJSONSerialization's dataWithJSONObject:str options:0 |error|:(reference)
+	if theData is missing value then error (theError's localizedDescription() as text) number -10000
+	-- convert data to a UTF8 string
+	set someString to current application's NSString's alloc()'s initWithData:theData encoding:(current application's NSUTF8StringEncoding)
+	return someString as text
+end toJSON
+
+-- pass either a POSIX path to the JSON file, or a JSON string; isPath is a boolean value to tell which
+on convertJSONToAS:jsonStringOrPath isPath:isPath
+	if isPath then -- read file as data
+		set theData to current application's NSData's dataWithContentsOfFile:jsonStringOrPath
+	else -- it's a string, convert to data
+		set aString to current application's NSString's stringWithString:jsonStringOrPath
+		set theData to aString's dataUsingEncoding:(current application's NSUTF8StringEncoding)
+	end if
+	-- convert to Cocoa object
+	set {theThing, theError} to current application's NSJSONSerialization's JSONObjectWithData:theData options:0 |error|:(reference)
+	if theThing is missing value then error (theError's localizedDescription() as text) number -10000
+	-- we don't know the class of theThing for coercion, so...
+	set listOfThing to current application's NSArray's arrayWithObject:theThing
+	return item 1 of (theThing as list)
+end convertJSONToAS:isPath:
 
 
 on isEmpty(str)
@@ -533,9 +474,10 @@ end readPlistAt:
 
 on encode(theString)
 	if class of theString is not text then return theString
-	if theString contains "\"" then set theString to my SearchandReplace(theString, "\"", "\\\"")
-	--if theString contains "\\" then set theString to my SearchandReplace(theString, "\\", "\\\\")
+	if theString contains "\"" then set theString to my SearchandReplace(theString, "\"", "\\"")
+	--if theString contains "\" then set theString to my SearchandReplace(theString, "\", "\\")
 	return theString
 end encode
+
 
 

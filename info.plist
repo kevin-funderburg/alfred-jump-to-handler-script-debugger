@@ -67,7 +67,7 @@
 				<key>queuemode</key>
 				<integer>1</integer>
 				<key>runningsubtext</key>
-				<string></string>
+				<string>getting handlers...</string>
 				<key>script</key>
 				<string>osascript gethandlers.scpt</string>
 				<key>scriptargtype</key>
@@ -75,9 +75,9 @@
 				<key>scriptfile</key>
 				<string></string>
 				<key>subtext</key>
-				<string></string>
+				<string>press ↩︎ to select handler</string>
 				<key>title</key>
-				<string>Get script debugger handlers</string>
+				<string>Get Script Debugger handlers of front script</string>
 				<key>type</key>
 				<integer>0</integer>
 				<key>withspace</key>
@@ -129,7 +129,10 @@
 			<key>config</key>
 			<dict>
 				<key>applescript</key>
-				<string>use kl : script "Kevin's Library"on alfred_script(q)	set {insertion, selectionend} to kl's split(q, ",")	--set q to q as number	tell application "Script Debugger"		tell front document			set selection to {insertion, selectionend}		end tell	end tellend alfred_script</string>
+				<string>on alfred_script(q)
+
+    	set saveTID to AppleScript's text item delimiters	set AppleScript's text item delimiters to ","	set {insertion, selectionend} to text items of q	set AppleScript's text item delimiters to saveTID
+	tell application "Script Debugger"		tell front document			set selection to {insertion, selectionend}		end tell	end tellend alfred_script</string>
 				<key>cachescript</key>
 				<true/>
 			</dict>
@@ -161,8 +164,6 @@
 		</dict>
 		<key>F29D06BC-5086-46A6-BDD0-52BC5A1C057F</key>
 		<dict>
-			<key>colorindex</key>
-			<integer>10</integer>
 			<key>xpos</key>
 			<integer>220</integer>
 			<key>ypos</key>
